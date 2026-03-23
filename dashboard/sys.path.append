@@ -1,0 +1,5 @@
+import os
+
+print("CURRENT FILE:", __file__)
+print("PARENT DIR:", os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+print("FILES THERE:", os.listdir(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))))

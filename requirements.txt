@@ -1,0 +1,47 @@
+# Core API
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.1
+pydantic[email]>=2.7.4
+pydantic-settings>=2.3.4
+python-multipart>=0.0.9
+
+# Database
+sqlalchemy>=2.0.30
+alembic>=1.13.1
+
+# Auth
+passlib[bcrypt]>=1.7.4
+python-jose[cryptography]>=3.3.0
+
+# AI / LangChain
+langchain>=0.2.6
+langchain-community>=0.2.6
+langchain-core>=0.2.10
+langchain-openai>=0.1.9
+
+# Vector store
+chromadb>=0.5.0
+
+# Optional: local LLM via Ollama (uncomment if needed)
+# ollama>=0.2.0
+
+# File parsing
+pandas>=2.2.2
+numpy>=1.26.4
+PyPDF2>=3.0.1
+openpyxl>=3.1.5
+
+# Dashboard
+streamlit>=1.36.0
+plotly>=5.22.0
+matplotlib>=3.9.0
+
+# Task scheduling
+apscheduler>=3.10.4
+
+# Utilities
+python-dotenv>=1.0.1
+
+# Observability (optional but recommended)
+# langsmith>=0.1.0
+
