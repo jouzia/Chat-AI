@@ -1,8 +1,9 @@
 import os
 import sys
 
-# ✅ FORCE absolute project path
-sys.path.insert(0, r"C:\Users\jouzi_jqhl8tz\Downloads\python")
+# ✅ FORCE project root in path
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import streamlit as st
 from assistant import build_conversational_chain, generate_response
