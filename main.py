@@ -77,7 +77,7 @@ async def chat(
     req: ChatRequest,
     current_user: User = Depends(get_current_user),
 ):
-    from ai.assistant import build_conversational_chain
+    from assistant import build_conversational_chain
 
     chain = build_conversational_chain()
 
