@@ -17,16 +17,16 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 # ---------- LLM ----------
 def get_llm(model: str = "auto"):
     provider = os.getenv("LLM_PROVIDER", "ollama").lower()
-
+    provider_display = provider.capitalize()
     if provider == "openai":
         openai_key = os.getenv("OPENAI_API_KEY")
-        if openai_key:
+        if openai_key and openai_key.startswith("sk-") and len(openai_key.strip()) > 30:
             resolved = model if model not in ("auto",) else "gpt-3.5-turbo"
             return ChatOpenAI(model=resolved, temperature=0.7)
 
     elif provider == "groq":
         groq_key = os.getenv("GROQ_API_KEY")
-        if groq_key:
+        if groq_key and groq_key.startswith("gsk_") and len(groq_key.strip()) > 30:
             from langchain_groq import ChatGroq
             return ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.7)
 
@@ -42,9 +42,10 @@ def get_llm(model: str = "auto"):
     from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
     from langchain_core.messages import AIMessage
 
-    err_msg = f"⚠️ Please configure {provider} API key or settings. Choose a provider from the sidebar."
     if provider == "ollama":
         err_msg = "⚠️ Make sure Ollama is installed and running locally on port 11434, or check 'pip install langchain-community'."
+    else:
+        err_msg = f"⚠️ Please configure a valid {provider_display} API key in your environment or sidebar."
 
     return FakeMessagesListChatModel(
         responses=[AIMessage(content=err_msg)]

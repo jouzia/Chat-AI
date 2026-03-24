@@ -7,10 +7,12 @@ from langchain_core.embeddings.fake import FakeEmbeddings
 
 def get_embeddings():
     api_key = os.getenv("OPENAI_API_KEY")
-    if api_key:
+    # Basic validation: OpenAI keys start with 'sk-' and are typically 51 characters.
+    # We check for a minimum length (e.g., 40) to catch truncated or nonsense values.
+    if api_key and api_key.startswith("sk-") and len(api_key.strip()) > 30:
         return OpenAIEmbeddings()
     else:
-        # FakeEmbeddings for local testing without an API key
+        # FakeEmbeddings for local testing or when an API key is missing/invalid
         return FakeEmbeddings(size=1536)
 
 
