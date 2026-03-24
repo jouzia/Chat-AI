@@ -1,14 +1,19 @@
 import os
 import sys
 
-# ✅ FORCE project root in path
-import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import streamlit as st
-from assistant import build_conversational_chain, generate_response
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Load Streamlit secrets into environment variables
+def load_secrets():
+    for key in ["GROQ_API_KEY", "OPENAI_API_KEY", "LLM_PROVIDER", "OLLAMA_MODEL"]:
+        if key in st.secrets and not os.getenv(key):
+            os.environ[key] = st.secrets[key]
+
+load_secrets()
+
+from assistant import build_conversational_chain, generate_response
 
 
 # -----------------------------

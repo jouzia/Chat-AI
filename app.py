@@ -1,13 +1,16 @@
 import os
 import streamlit as st
-import os
-import os
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+# Load Streamlit secrets into environment variables
+def load_secrets():
+    for key in ["GROQ_API_KEY", "OPENAI_API_KEY", "LLM_PROVIDER", "OLLAMA_MODEL"]:
+        if key in st.secrets and not os.getenv(key):
+            os.environ[key] = st.secrets[key]
+
+load_secrets()
 
 from assistant import build_conversational_chain, generate_response
-import streamlit as st
-import os
-# -----------------------------
+
 # INIT STATE
 # -----------------------------
 def init_state():
