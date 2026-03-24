@@ -1,5 +1,11 @@
 import os
 import streamlit as st
+import streamlit as st
+from groq import Groq
+
+groq_api_key = st.secrets["groq"]["api_key"]
+client = Groq(api_key=groq_api_key)
+
 
 # Load Streamlit secrets into environment variables
 def load_secrets():
