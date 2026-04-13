@@ -1,62 +1,54 @@
 import os
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
+import sys
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
-from vector_store import get_vector_store
-from langchain_core.messages import HumanMessage
-import streamlit as st
-import os
-import sys
-import os
-print(os.getcwd())
-print(os.listdir(".."))
-import os
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-# ---------- LLM ----------
+# Attempt to import vector store, handle path issues gracefully
+try:
+    from vector_store import get_vector_store
+except ImportError:
+    # If vector_store is in a parent directory
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+    try:
+        from vector_store import get_vector_store
+    except ImportError:
+        get_vector_store = None
+
+# ---------- LLM LOADER ----------
 def get_llm(model: str = "auto"):
-    provider = os.getenv("LLM_PROVIDER", "ollama").lower()
-    provider_display = provider.capitalize()
+    provider = os.getenv("LLM_PROVIDER", "groq").lower()
+    
     if provider == "openai":
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if openai_key and openai_key.startswith("sk-") and len(openai_key.strip()) > 30:
-            resolved = model if model not in ("auto",) else "gpt-3.5-turbo"
-            return ChatOpenAI(model=resolved, temperature=0.7)
+        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if api_key.startswith("sk-"):
+            return ChatOpenAI(model="gpt-4o", temperature=0.7)
 
     elif provider == "groq":
-        groq_key = os.getenv("GROQ_API_KEY")
-        if groq_key and groq_key.startswith("gsk_") and len(groq_key.strip()) > 30:
-            from langchain_groq import ChatGroq
-            return ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.7)
+        api_key = os.getenv("GROQ_API_KEY", "").strip()
+        if api_key.startswith("gsk_"):
+            try:
+                from langchain_groq import ChatGroq
+                # Use the most stable 2026 model name
+                return ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.7)
+            except ImportError:
+                return FakeMessagesListChatModel(responses=[AIMessage(content="⚠️ Install: pip install langchain-groq")])
 
     elif provider == "ollama":
-        ollama_model = os.getenv("OLLAMA_MODEL", "llama3")
         try:
             from langchain_community.chat_models import ChatOllama
-            return ChatOllama(model=ollama_model, temperature=0.7)
+            return ChatOllama(model=os.getenv("OLLAMA_MODEL", "llama3"), temperature=0.7)
         except ImportError:
             pass
 
-    # fallback
-    from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
-    from langchain_core.messages import AIMessage
-
-    if provider == "ollama":
-        err_msg = "⚠️ Make sure Ollama is installed and running locally on port 11434, or check 'pip install langchain-community'."
-    else:
-        err_msg = f"⚠️ Please configure a valid {provider_display} API key in your environment or sidebar."
-
-    return FakeMessagesListChatModel(
-        responses=[AIMessage(content=err_msg)]
-    )
-
+    # Fallback with clear error message
+    err_msg = f"⚠️ Provider '{provider}' not configured. Check your API keys in the sidebar."
+    return FakeMessagesListChatModel(responses=[AIMessage(content=err_msg)])
 
 # ---------- PROMPT ----------
-CONVERSATION_TEMPLATE = """You are a helpful AI assistant.
-
-Use context if available.
-If not, answer normally.
+CONVERSATION_TEMPLATE = """You are Bud AI, a helpful engineering assistant.
+Use the provided context to answer. If the context isn't relevant, use your own knowledge.
 
 Chat History:
 {chat_history}
@@ -65,81 +57,67 @@ Context:
 {context}
 
 Question: {question}
-
 Answer:"""
 
 CONVERSATION_PROMPT = PromptTemplate.from_template(CONVERSATION_TEMPLATE)
 
-
-# ---------- CHAIN ----------
-def build_conversational_chain(model: str = "auto"):
-    llm = get_llm(model)
-
-    try:
-        retriever = get_vector_store(
-            collection_name="conversations"
-        ).as_retriever(search_kwargs={"k": 5})
-    except Exception:
-        retriever = None
-
-    return _SimpleRAGAssistant(llm, retriever)
-
-
+# ---------- RAG ENGINE ----------
 class _SimpleRAGAssistant:
     def __init__(self, llm, retriever):
         self.llm = llm
         self.retriever = retriever
 
     def _format_chat_history(self, chat_history):
-        if not chat_history:
-            return ""
-
-        last = chat_history[-6:]
-        return "\n".join(
-            f"{'User' if r=='user' else 'Assistant'}: {c}"
-            for r, c in last
-        )
+        if not chat_history: return ""
+        # Keep last 6 exchanges for context window safety
+        return "\n".join([f"{'User' if r=='user' else 'Assistant'}: {c}" for r, c in chat_history[-6:]])
 
     def _get_context(self, question):
-        if not self.retriever:
-            return ""
-
+        if not self.retriever: return "No additional context available."
         try:
             docs = self.retriever.get_relevant_documents(question)
-            return "\n\n".join(
-                getattr(d, "page_content", str(d)) for d in docs
-            )
+            return "\n\n".join([d.page_content for d in docs])
         except Exception:
             return ""
 
-    def answer(self, question, chat_history=None):
+    def invoke(self, inputs: dict):
+        question = inputs.get("question", "")
+        chat_history = inputs.get("chat_history", [])
+        
         context = self._get_context(question)
-        chat_history_text = self._format_chat_history(chat_history)
+        history_text = self._format_chat_history(chat_history)
 
-        prompt = CONVERSATION_PROMPT.format(
-            chat_history=chat_history_text,
+        formatted_prompt = CONVERSATION_PROMPT.format(
+            chat_history=history_text,
             context=context,
-            question=question,
+            question=question
         )
 
         try:
-            resp = self.llm.invoke([HumanMessage(content=prompt)])
-            return getattr(resp, "content", str(resp))
+            # LangChain 2026 standard 'invoke'
+            resp = self.llm.invoke([HumanMessage(content=formatted_prompt)])
+            content = getattr(resp, "content", str(resp))
+            return {"answer": content}
         except Exception as e:
-            return f"❌ Error: {e}"
+            return {"answer": f"❌ LLM Error: {str(e)}"}
 
-    def invoke(self, inputs: dict):
-        return {
-            "answer": self.answer(
-                inputs.get("question", ""),
-                chat_history=inputs.get("chat_history"),
-            )
-        }
+# ---------- EXPORTED FUNCTIONS ----------
+def build_conversational_chain(model: str = "auto"):
+    llm = get_llm(model)
+    retriever = None
+    
+    if get_vector_store:
+        try:
+            retriever = get_vector_store(collection_name="conversations").as_retriever(search_kwargs={"k": 3})
+        except Exception:
+            retriever = None
+            
+    return _SimpleRAGAssistant(llm, retriever)
 
-
-# ---------- HELPER ----------
 def generate_response(chain, user_input: str, chat_history=None):
-    return chain.invoke({
+    # This matches the call from your app.py
+    result = chain.invoke({
         "question": user_input,
         "chat_history": chat_history or []
-    })["answer"]
+    })
+    return result["answer"]
