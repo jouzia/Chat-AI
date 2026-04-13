@@ -31,32 +31,44 @@ def ensure_chain():
 def apply_custom_styles():
     st.markdown("""
         <style>
+        /* 1. DEFINE THE ANIMATION */
         @keyframes gradientBG {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
         }
+
+        /* 2. APPLY TO THE APP CONTAINER */
         .stApp {
-            /* Blue, Purple, Pink Gradient */
-            background: linear-gradient(-45deg, #4facfe, #a76dcc, #f093fb);
-            background-size: 400% 400%;
-            animation: gradientBG 15s ease infinite;
-            color: #ffffff;
+            background: linear-gradient(-45deg, #4facfe, #a76dcc, #f093fb, #4facfe) !important;
+            background-size: 400% 400% !important;
+            animation: gradientBG 12s ease infinite !important;
+            background-attachment: fixed;
         }
-        [data-testid="stSidebar"] {
-            background-color: rgba(0, 0, 0, 0.4);
-            backdrop-filter: blur(15px);
-        }
+
+        /* 3. ENSURE CHAT BUBBLES ARE SEE-THROUGH (Glassmorphism) */
         .stChatMessage {
-            background: rgba(255, 255, 255, 0.1) !important;
-            backdrop-filter: blur(10px) !important;
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            margin-bottom: 10px;
+            background: rgba(255, 255, 255, 0.12) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            border-radius: 20px !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            margin-bottom: 15px !important;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 4. MAKE SIDEBAR GLASSY */
+        [data-testid="stSidebar"] {
+            background-color: rgba(0, 0, 0, 0.3) !important;
+            backdrop-filter: blur(20px) !important;
+        }
+
+        /* 5. FIX TEXT CLARITY */
+        h1, h2, h3, p {
+            color: white !important;
         }
         </style>
     """, unsafe_allow_html=True)
-
 # 5. CHAT LOGIC
 def main():
     init_state()
