@@ -3,14 +3,13 @@ import streamlit as st
 
 # 1. LOAD SECRETS & CONFIG
 def load_secrets():
-    # Priority: Streamlit Secrets -> Environment Variables
     for key in ["GROQ_API_KEY", "OPENAI_API_KEY", "LLM_PROVIDER", "OLLAMA_MODEL"]:
         if key in st.secrets:
             os.environ[key] = st.secrets[key]
 
 load_secrets()
 
-# Import the 'Brain' logic
+# Import the 'Brain' logic from assistant.py
 from assistant import build_conversational_chain, generate_response
 
 # 2. INIT STATE
@@ -22,27 +21,35 @@ def init_state():
 
 # 3. BUILD CHAIN SAFELY
 def ensure_chain():
-    # Only build if we have a provider set
     if st.session_state.chain is None:
         try:
             st.session_state.chain = build_conversational_chain()
         except Exception as e:
             st.error(f"Failed to initialize AI: {e}")
 
-# 4. UI STYLING
+# 4. UI STYLING (The Animated Tri-Color Gradient)
 def apply_custom_styles():
     st.markdown("""
         <style>
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
         .stApp {
-            background: #0d0f1a;
+            /* Blue, Purple, Pink Gradient */
+            background: linear-gradient(-45deg, #4facfe, #a76dcc, #f093fb);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
             color: #ffffff;
         }
         [data-testid="stSidebar"] {
-            background-color: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
+            background-color: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(15px);
         }
         .stChatMessage {
-            background: rgba(255, 255, 255, 0.03);
+            background: rgba(255, 255, 255, 0.1) !important;
+            backdrop-filter: blur(10px) !important;
             border-radius: 15px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             margin-bottom: 10px;
@@ -56,9 +63,9 @@ def main():
     apply_custom_styles()
     
     st.title("Bud AI 🤖")
-    st.caption("BCA Engineering Edition | v2.4")
+    st.caption("BCA Engineering Edition | v2.5")
 
-    # Sidebar for Config
+    # Sidebar
     with st.sidebar:
         st.header("⚙️ Settings")
         if st.button("🔄 Reset Session"):
@@ -73,27 +80,28 @@ def main():
 
     # Display History
     for role, content in st.session_state.messages:
-        with st.chat_message(role, avatar="🧑‍💻" if role == "user" else "🤖"):
+        # User is coder, Assistant is the Spark/Flash icon
+        with st.chat_message(role, avatar="🧑‍💻" if role == "user" else "⚡"):
             st.markdown(content)
 
-    # User Input
+    # User Input (Hitting Enter sends the message)
     if prompt := st.chat_input("Ask me anything..."):
         st.session_state.messages.append(("user", prompt))
         with st.chat_message("user", avatar="🧑‍💻"):
             st.markdown(prompt)
 
-        with st.chat_message("assistant", avatar="🤖"):
+        with st.chat_message("assistant", avatar="⚡"):
             placeholder = st.empty()
-            with st.spinner("Grok is thinking..."):
+            with st.spinner("Bud is thinking..."):
                 try:
-                    # Pass the chain and history to generate the answer
+                    # Pass chain, current prompt, and history
                     answer = generate_response(
                         st.session_state.chain, 
                         prompt, 
                         st.session_state.messages[:-1]
                     )
                 except Exception as e:
-                    answer = f"❌ Connection Error: {str(e)}"
+                    answer = f"❌ Error: {str(e)}"
             
             placeholder.markdown(answer)
             st.session_state.messages.append(("assistant", answer))
