@@ -1,122 +1,160 @@
-import os
+import sys
 import streamlit as st
-
-# 1. LOAD SECRETS & CONFIG
-def load_secrets():
-    for key in ["GROQ_API_KEY", "OPENAI_API_KEY", "LLM_PROVIDER", "OLLAMA_MODEL"]:
-        if key in st.secrets:
-            os.environ[key] = st.secrets[key]
-
-load_secrets()
-
-# Import the 'Brain' logic from assistant.py
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from assistant import build_conversational_chain, generate_response
 
-# 2. INIT STATE
+# -----------------------------
+# 1. INITIALIZATION
+# -----------------------------
 def init_state():
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "chain" not in st.session_state:
         st.session_state.chain = None
+    if "current_personality" not in st.session_state:
+        st.session_state.current_personality = "Professor Z"
 
-# 3. BUILD CHAIN SAFELY
 def ensure_chain():
     if st.session_state.chain is None:
-        try:
-            st.session_state.chain = build_conversational_chain()
-        except Exception as e:
-            st.error(f"Failed to initialize AI: {e}")
+        st.session_state.chain = build_conversational_chain()
 
-# 4. UI STYLING (The Animated Tri-Color Gradient)
-def apply_custom_styles():
-    st.markdown("""
-        <style>
-        /* 1. DEFINE THE ANIMATION */
-        @keyframes gradientBG {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        /* 2. APPLY TO THE APP CONTAINER */
-        .stApp {
-            background: linear-gradient(-45deg, #4facfe, #a76dcc, #f093fb, #4facfe) !important;
-            background-size: 400% 400% !important;
-            animation: gradientBG 12s ease infinite !important;
-            background-attachment: fixed;
-        }
-
-        /* 3. ENSURE CHAT BUBBLES ARE SEE-THROUGH (Glassmorphism) */
-        .stChatMessage {
-            background: rgba(255, 255, 255, 0.12) !important;
-            backdrop-filter: blur(12px) !important;
-            -webkit-backdrop-filter: blur(12px) !important;
-            border-radius: 20px !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            margin-bottom: 15px !important;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-        }
-
-        /* 4. MAKE SIDEBAR GLASSY */
-        [data-testid="stSidebar"] {
-            background-color: rgba(0, 0, 0, 0.3) !important;
-            backdrop-filter: blur(20px) !important;
-        }
-
-        /* 5. FIX TEXT CLARITY */
-        h1, h2, h3, p {
-            color: white !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-# 5. CHAT LOGIC
-def main():
-    init_state()
-    apply_custom_styles()
+# -----------------------------
+# 2. THE BUD AI "SQUAD" SIDEBAR
+# -----------------------------
+def llm_config_sidebar():
+    st.sidebar.markdown("### ⚙️ System Control")
     
-    st.title("Bud AI 🤖")
-    st.caption("BCA Engineering Edition | v2.5")
+    # MASCOT SELECTION (The "Secret Sauce" for PromptWars)
+    st.sidebar.subheader("🛡️ Active Buddy")
+    agent_mode = st.sidebar.radio("Switch Personality:", ["Professor Z", "Aman"])
+    
+    if agent_mode == "Professor Z":
+        st.sidebar.success("👨‍🏫 **Mentor Mode**\nSocratic & Patient")
+        st.session_state.current_personality = "You are Professor Z, a patient academic mentor. Don't give answers directly; guide the user with analogies and encouraging questions."
+    else:
+        st.sidebar.warning("🏎️ **Rival Mode**\nBrutal & Technical")
+        st.session_state.current_personality = "You are Aman, a sharp technical rival. Challenge the user's logic aggressively. Point out bugs bluntly and push them to be better."
 
-    # Sidebar
-    with st.sidebar:
-        st.header("⚙️ Settings")
-        if st.button("🔄 Reset Session"):
-            st.session_state.messages = []
+    st.sidebar.divider()
+    
+    # PROVIDER LOGIC
+    provider = st.sidebar.selectbox(
+        "LLM Provider",
+        ["OpenAI", "Groq", "Ollama (Local)"],
+        index=0
+    )
+
+    if provider == "OpenAI":
+        api_key = st.sidebar.text_input("OpenAI Key", type="password", value=os.getenv("OPENAI_API_KEY", ""))
+        if st.sidebar.button("Connect OpenAI"):
+            os.environ["OPENAI_API_KEY"] = api_key
+            os.environ["LLM_PROVIDER"] = "openai"
             st.session_state.chain = None
             st.rerun()
-        
-        provider = st.selectbox("LLM Provider", ["Groq", "OpenAI", "Ollama"], index=0)
-        os.environ["LLM_PROVIDER"] = provider.lower()
-        
+
+    elif provider == "Groq":
+        api_key = st.sidebar.text_input("Groq Key", type="password", value=os.getenv("GROQ_API_KEY", ""))
+        if st.sidebar.button("Connect Groq"):
+            os.environ["GROQ_API_KEY"] = api_key
+            os.environ["LLM_PROVIDER"] = "groq"
+            st.session_state.chain = None
+            st.rerun()
+
+    elif provider == "Ollama (Local)":
+        model = st.sidebar.text_input("Ollama Model", value="llama3")
+        if st.sidebar.button("Connect Ollama"):
+            os.environ["OLLAMA_MODEL"] = model
+            os.environ["LLM_PROVIDER"] = "ollama"
+            st.session_state.chain = None
+            st.rerun()
+
+    st.sidebar.divider()
+    if st.sidebar.button("🔄 Reset Session"):
+        st.session_state.messages = []
+        st.session_state.chain = None
+        st.rerun()
+
+# -----------------------------
+# 3. THE LIQUID-GLASS UI
+# -----------------------------
+def chat_ui():
+    st.markdown(
+        """
+        <style>
+        /* Modern Dark Gradient Background */
+        .stApp {
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            color: #ffffff;
+        }
+        /* Glassmorphism Sidebar */
+        [data-testid="stSidebar"] {
+            background-color: rgba(255, 255, 255, 0.05) !important;
+            backdrop-filter: blur(15px);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* Frosted Glass Chat Bubbles */
+        .stChatMessage {
+            background: rgba(255, 255, 255, 0.07) !important;
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            margin-bottom: 15px;
+        }
+        /* Input Field Styling */
+        .stChatInputContainer {
+            padding-bottom: 20px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    st.title("🛡️ Bud AI: The Squad Hub")
+    st.caption("Developed in Google Antigravity | Rival-Mentor Framework v2.0")
+
+    llm_config_sidebar()
     ensure_chain()
+
+    # Determine Active Avatar
+    is_prof = "Professor Z" in st.session_state.current_personality
+    assistant_avatar = "👨‍🏫" if is_prof else "🏎️"
 
     # Display History
     for role, content in st.session_state.messages:
-        # User is coder, Assistant is the Spark/Flash icon
-        with st.chat_message(role, avatar="🧑‍💻" if role == "user" else "⚡"):
+        avatar = "🧑‍💻" if role == "user" else assistant_avatar
+        with st.chat_message(role, avatar=avatar):
             st.markdown(content)
 
-    # User Input (Hitting Enter sends the message)
-    if prompt := st.chat_input("Ask me anything..."):
+    # Chat Input
+    if prompt := st.chat_input("Drop a message for the Squad... 🚀"):
         st.session_state.messages.append(("user", prompt))
         with st.chat_message("user", avatar="🧑‍💻"):
             st.markdown(prompt)
 
-        with st.chat_message("assistant", avatar="⚡"):
+        with st.chat_message("assistant", avatar=assistant_avatar):
             placeholder = st.empty()
-            with st.spinner("Bud is thinking..."):
-                try:
-                    # Pass chain, current prompt, and history
+            try:
+                if st.session_state.chain is None:
+                    answer = "⚠️ Please configure your LLM provider in the sidebar first."
+                else:
+                    # We pass the personality string specifically here
                     answer = generate_response(
                         st.session_state.chain, 
-                        prompt, 
-                        st.session_state.messages[:-1]
+                        prompt, # The actual question
+                        st.session_state.messages[:-1], # History
+                        personality=st.session_state.current_personality # The Mascot!
                     )
-                except Exception as e:
-                    answer = f"❌ Error: {str(e)}"
-            
-            placeholder.markdown(answer)
-            st.session_state.messages.append(("assistant", answer))
+            except Exception as e:
+                answer = f"❌ Error: {e}"
 
+            placeholder.markdown(answer)
+        st.session_state.messages.append(("assistant", answer))
+
+# -----------------------------
+# 4. EXECUTION
+# -----------------------------
 if __name__ == "__main__":
-    main()
+    init_state()
+    chat_ui()
