@@ -1,22 +1,26 @@
 import os
-os.environ["LLM_PROVIDER"] = os.getenv("LLM_PROVIDER", "groq")
+from contextlib import asynccontextmanager
 
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from contextlib import asynccontextmanager
-import uvicorn
 
-from fastapi import FastAPI, Depends
 from auth.routes import router as auth_router
-from database.config import engine, Base
 from auth.security import get_current_user
+from database.config import engine, Base
 from database.models import User
 
 
-ALLOWED_ORIGINS = os.getenv(
-    "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8501"
-).split(",")
+os.environ["LLM_PROVIDER"] = os.getenv("LLM_PROVIDER", "groq")
+
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8501"
+    ).split(",")
+    if origin.strip()
+]
 
 
 @asynccontextmanager
@@ -42,8 +46,6 @@ app.add_middleware(
 app.include_router(auth_router)
 
 
-# ---------- Health ----------
-
 @app.get("/")
 def read_root():
     return {"status": "ok", "message": "AI Platform API is running"}
@@ -54,18 +56,10 @@ def health():
     return {"status": "healthy"}
 
 
-# 🔥 ADD THIS DEBUG ENDPOINT
-@app.get("/debug-key")
-def debug_key():
-    return {"key": os.getenv("OPENAI_API_KEY")}
-
-
 @app.get("/users/me")
 def read_users_me(current_user: User = Depends(get_current_user)):
     return {"username": current_user.username}
 
-
-# ---------- Chat ----------
 
 class ChatRequest(BaseModel):
     message: str
@@ -92,4 +86,5 @@ async def chat(
 
 
 if __name__ == "__main__":
+    import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
