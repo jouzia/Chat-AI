@@ -16,6 +16,14 @@ if not DATABASE_URL:
         )
     DATABASE_URL = "sqlite:///./ai_platform.db"
 
+# SQLAlchemy's plain PostgreSQL URL normally resolves to psycopg2. We ship
+# psycopg v3, so explicitly select that driver when a standard PostgreSQL URL
+# is supplied by Supabase or another hosted PostgreSQL provider.
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+elif DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
 engine = create_engine(
