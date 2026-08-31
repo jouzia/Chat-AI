@@ -1,49 +1,39 @@
 import os
-import sys
+
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.messages import HumanMessage
 
-# Standardizing the import path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-# Try-except for the vector store in case it's not set up yet
-try:
-    from vector_store import get_vector_store
-except ImportError:
-    get_vector_store = None
 
 # ---------- LLM LOADER ----------
 def get_llm(model: str = "auto"):
-    provider = os.getenv("LLM_PROVIDER", "ollama").lower()
+    provider = os.getenv("LLM_PROVIDER", "groq").lower()
 
     if provider == "openai":
         openai_key = os.getenv("OPENAI_API_KEY")
         if openai_key:
-            resolved = model if model not in ("auto",) else "gpt-3.5-turbo"
+            resolved = model if model != "auto" else os.getenv("OPENAI_MODEL", "gpt-4o-mini")
             return ChatOpenAI(model=resolved, temperature=0.7)
 
-    elif provider == "groq":
+    if provider == "groq":
         groq_key = os.getenv("GROQ_API_KEY")
         if groq_key:
             from langchain_groq import ChatGroq
-            return ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.7)
+            return ChatGroq(
+                model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                temperature=0.7,
+                groq_api_key=groq_key,
+            )
 
-    elif provider == "ollama":
-        ollama_model = os.getenv("OLLAMA_MODEL", "llama3")
-        try:
-            from langchain_community.chat_models import ChatOllama
-            return ChatOllama(model=ollama_model, temperature=0.7)
-        except ImportError:
-            pass
-
-    # Fallback to a fake model with an error message
+    # Safe fallback so the API still starts when no provider is configured.
     from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
     from langchain_core.messages import AIMessage
-    return FakeMessagesListChatModel(responses=[AIMessage(content="⚠️ Provider not configured correctly.")])
+    return FakeMessagesListChatModel(
+        responses=[AIMessage(content="AI provider is not configured. Set GROQ_API_KEY or OPENAI_API_KEY.")]
+    )
 
-# ---------- BUD AI PROMPT TEMPLATE ----------
-# Added {personality} so the agent knows if it's Prof Z or Aman
+
+# ---------- BUD AI PROMPT ----------
 BUD_TEMPLATE = """{personality}
 
 Use the following context if available to help the student.
@@ -61,56 +51,58 @@ Answer:"""
 
 BUD_PROMPT = PromptTemplate.from_template(BUD_TEMPLATE)
 
-# ---------- THE ASSISTANT CLASS ----------
-class _SimpleRAGAssistant:
-    def __init__(self, llm, retriever):
+
+class _SimpleAssistant:
+    def __init__(self, llm):
         self.llm = llm
-        self.retriever = retriever
 
     def _format_chat_history(self, chat_history):
-        if not chat_history: return ""
+        if not chat_history:
+            return ""
         last = chat_history[-6:]
-        return "\n".join(f"{'User' if r=='user' else 'Assistant'}: {c}" for r, c in last)
+        return "\n".join(
+            f"{'User' if role == 'user' else 'Assistant'}: {content}"
+            for role, content in last
+        )
 
-    def _get_context(self, question):
-        if not self.retriever: return ""
-        try:
-            docs = self.retriever.get_relevant_documents(question)
-            return "\n\n".join(getattr(d, "page_content", str(d)) for d in docs)
-        except: return ""
-
-    def answer(self, question, chat_history=None, personality="You are a helpful AI assistant."):
-        context = self._get_context(question)
-        chat_history_text = self._format_chat_history(chat_history)
-
-        # Injects the Mascot Personality here!
-        prompt_text = BUD_PROMPT.format(
-            personality=personality,
-            chat_history=chat_history_text,
-            context=context,
+    def _prompt(self, question, chat_history=None, personality=None):
+        return BUD_PROMPT.format(
+            personality=personality or "You are a helpful AI assistant.",
+            chat_history=self._format_chat_history(chat_history),
+            context="",
             question=question,
         )
 
+    def answer(self, question, chat_history=None, personality=None):
         try:
-            resp = self.llm.invoke([HumanMessage(content=prompt_text)])
-            return getattr(resp, "content", str(resp))
-        except Exception as e:
-            return f"❌ Error: {e}"
+            response = self.llm.invoke([
+                HumanMessage(content=self._prompt(question, chat_history, personality))
+            ])
+            return getattr(response, "content", str(response))
+        except Exception as exc:
+            return f"AI error: {exc}"
+
+    async def astream(self, payload):
+        question = payload.get("question", "")
+        prompt = self._prompt(question)
+
+        try:
+            async for chunk in self.llm.astream([HumanMessage(content=prompt)]):
+                content = getattr(chunk, "content", "")
+                if content:
+                    yield {"answer": content}
+        except Exception as exc:
+            yield {"answer": f"AI error: {exc}"}
 
 
-    # ---------- HELPER ----------
+def build_conversational_chain():
+    """Build the lightweight API chat chain without ChromaDB/Streamlit dependencies."""
+    return _SimpleAssistant(get_llm())
+
+
 def generate_response(chain, user_input: str, chat_history=None, personality=None):
-    # This now matches the call in your app.py
     return chain.answer(
         question=user_input,
         chat_history=chat_history or [],
-        personality=personality
-    )
-
-def generate_response(chain, user_input: str, chat_history=None, personality=None):
-    # Now accepts 'personality' from app.py
-    return chain.answer(
-        question=user_input,
-        chat_history=chat_history or [],
-        personality=personality or "You are a helpful AI assistant."
+        personality=personality or "You are a helpful AI assistant.",
     )
