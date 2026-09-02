@@ -5,6 +5,9 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.messages import HumanMessage
 
 
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
+
+
 # ---------- LLM LOADER ----------
 def get_llm(model: str = "auto"):
     provider = os.getenv("LLM_PROVIDER", "groq").lower()
@@ -13,14 +16,18 @@ def get_llm(model: str = "auto"):
         openai_key = os.getenv("OPENAI_API_KEY")
         if openai_key:
             resolved = model if model != "auto" else os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-            return ChatOpenAI(model=resolved, temperature=0.7)
+            return ChatOpenAI(
+                model=resolved,
+                temperature=0.7,
+                api_key=openai_key,
+            )
 
     if provider == "groq":
         groq_key = os.getenv("GROQ_API_KEY")
         if groq_key:
             from langchain_groq import ChatGroq
             return ChatGroq(
-                model=os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+                model=os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL),
                 temperature=0.7,
                 groq_api_key=groq_key,
             )
@@ -29,7 +36,11 @@ def get_llm(model: str = "auto"):
     from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
     from langchain_core.messages import AIMessage
     return FakeMessagesListChatModel(
-        responses=[AIMessage(content="AI provider is not configured. Set GROQ_API_KEY or OPENAI_API_KEY.")]
+        responses=[
+            AIMessage(
+                content="AI provider is not configured. Set GROQ_API_KEY or OPENAI_API_KEY."
+            )
+        ]
     )
 
 
@@ -75,9 +86,9 @@ class _SimpleAssistant:
 
     def answer(self, question, chat_history=None, personality=None):
         try:
-            response = self.llm.invoke([
-                HumanMessage(content=self._prompt(question, chat_history, personality))
-            ])
+            response = self.llm.invoke(
+                [HumanMessage(content=self._prompt(question, chat_history, personality))]
+            )
             return getattr(response, "content", str(response))
         except Exception as exc:
             return f"AI error: {exc}"
