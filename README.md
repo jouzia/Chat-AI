@@ -1,4 +1,4 @@
-#  Bud AI: The Rival-Mentor Learning Framework
+#  Bud AI: The Rival-Mentor Learning Framework 
 **Built for PromptWars 2026** *Empowering BCA Students through Interactive AI Persona-Driven Mentorship.*
 
 ##  The Vision
